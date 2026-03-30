@@ -1,3 +1,5 @@
+import { httpBaseToWsUrl } from './httpToWs'
+
 const DEFAULT_BASE = 'http://localhost:8001'
 
 export function getApiBase(): string {
@@ -8,12 +10,7 @@ export function getApiBase(): string {
 }
 
 export function getWsUrl(): string {
-  const b = getApiBase()
-  const path = '/ws'
-  if (b.startsWith('https://')) {
-    return b.replace(/^https/, 'wss') + path
-  }
-  return b.replace(/^http/, 'ws') + path
+  return httpBaseToWsUrl(getApiBase())
 }
 
 export type SensorReading = {

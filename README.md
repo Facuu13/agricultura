@@ -50,3 +50,40 @@ docker exec $(docker ps -q -f name=mosquitto) mosquitto_pub -h localhost \
 ```
 
 Luego abrí el frontend y usá `device_id` `dev1`.
+
+## Documentación
+
+- [Manual de usuario (panel web)](docs/manual_usuario.md)
+- [Manual técnico / operación](docs/manual_tecnico.md)
+- [Guía de pruebas manuales (checklist)](docs/guia_pruebas_manuales.md)
+
+## Simulador de ESP32 (MQTT)
+
+Publica telemetría como el firmware (`agro/<device>/data`) y opcionalmente muestra comandos en `actuators`:
+
+```bash
+pip install -r scripts/requirements.txt
+python scripts/simulate_esp32.py --host 127.0.0.1 --device dev1 --interval 5
+```
+
+- `--once`: un solo mensaje.
+- `--listen-actuators`: imprime lo que el backend envía a la válvula.
+
+## Tests automáticos
+
+**Backend** (pytest, sin broker MQTT):
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+**Frontend** (Vitest):
+
+```bash
+cd frontend
+npm test
+```
+
+En tests, el backend usa `ENABLE_MQTT=false` y una base SQLite temporal (ver `backend/tests/conftest.py`).

@@ -29,6 +29,11 @@ def _ensure_sqlite_parent_dir(url: str) -> None:
     parent.mkdir(parents=True, exist_ok=True)
 
 
+class _NoOpMqtt:
+    def publish_actuator(self, device_id: str, valve: str) -> None:
+        log.debug("MQTT disabled: skip publish actuator %s %s", device_id, valve)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _ensure_sqlite_parent_dir(settings.database_url)
@@ -37,12 +42,17 @@ async def lifespan(app: FastAPI):
     loop = asyncio.get_running_loop()
     app.state.loop = loop
     app.state.ws_hub = hub
-    mqtt_svc = MqttService(loop=loop, ws_hub=hub)
-    app.state.mqtt_service = mqtt_svc
-    mqtt_svc.start()
-    log.info("Application started")
+    if settings.enable_mqtt:
+        mqtt_svc = MqttService(loop=loop, ws_hub=hub)
+        app.state.mqtt_service = mqtt_svc
+        mqtt_svc.start()
+        log.info("Application started (MQTT on)")
+    else:
+        app.state.mqtt_service = _NoOpMqtt()
+        log.info("Application started (MQTT off)")
     yield
-    mqtt_svc.stop()
+    if settings.enable_mqtt:
+        app.state.mqtt_service.stop()
     log.info("Application shutdown")
 
 
