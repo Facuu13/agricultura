@@ -1,0 +1,11 @@
+secrets.py
+config.py
+data/*.db
+node_modules/
+__pycache__/
+*.py[cod]
+.env
+.venv/
+dist/
+*.egg-info/
+.DS_Store

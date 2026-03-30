@@ -1,0 +1,34 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      - agro
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: sqlite:////data/agro.db
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+    volumes:
+      - backend_data:/data
+    depends_on:
+      - mosquitto
+    networks:
+      - agro
+
+networks:
+  agro:
+    driver: bridge
+
+volumes:
+  backend_data:
