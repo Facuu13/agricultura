@@ -5,6 +5,10 @@ services:
       - "1883:1883"
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    # Para hardening en producción:
+    # - ./mosquitto/mosquitto.secure.conf:/mosquitto/config/mosquitto.conf:ro
+    # - ./mosquitto/passwords:/mosquitto/config/passwords:ro
+    # - ./mosquitto/acl:/mosquitto/config/acl:ro
     networks:
       - agro
 
@@ -18,6 +22,9 @@ services:
       DATABASE_URL: sqlite:////data/agro.db
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      ACTUATOR_API_KEY: ${ACTUATOR_API_KEY:-}
       CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
     volumes:
       - backend_data:/data

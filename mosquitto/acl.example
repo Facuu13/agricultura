@@ -1,0 +1,9 @@
+# Backend consume telemetría y publica actuadores.
+user agro_backend
+topic read agro/+/data
+topic write agro/+/actuators
+
+# Dispositivo publica telemetría y lee comandos de su topic.
+user agro_device
+topic write agro/+/data
+topic read agro/+/actuators

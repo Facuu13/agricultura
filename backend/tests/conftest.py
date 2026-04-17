@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 _tmpdir = tempfile.mkdtemp(prefix="agro_pytest_")
 _db_path = Path(_tmpdir) / "test.db"
@@ -22,7 +23,8 @@ from app.main import app  # noqa: E402
 @pytest.fixture(autouse=True)
 def _clean_db() -> Generator[None, None, None]:
     Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
     yield
 
 

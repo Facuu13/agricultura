@@ -31,6 +31,8 @@ Definibles en `docker-compose.yml` o `.env` del backend:
 | `DATABASE_URL` | SQLite por defecto (`sqlite:////data/agro.db` en contenedor). |
 | `MQTT_HOST` | Hostname del broker (en Compose: `mosquitto`). |
 | `MQTT_PORT` | Puerto del broker (1883). |
+| `MQTT_USERNAME` / `MQTT_PASSWORD` | Credenciales del broker (opcional en desarrollo, recomendado en producción). |
+| `ACTUATOR_API_KEY` | Si está definida, `POST /actuator` exige header `x-api-key`. |
 | `CORS_ORIGINS` | JSON array, ej. `["http://localhost:5173"]`. |
 | `ENABLE_MQTT` | `true`/`false`. Si `false`, no se conecta al broker; `POST /actuator` sigue respondiendo pero no publica (útil para tests). |
 
@@ -72,4 +74,12 @@ El fichero SQLite en Docker vive en el volumen `backend_data`. Para backup, copi
 
 ## Seguridad (producción)
 
-La configuración actual de Mosquitto permite anónimos: **solo para desarrollo**. En producción: TLS, usuarios/contraseñas o certificados, API detrás de HTTPS y reverse proxy.
+La configuración actual `mosquitto.conf` permite anónimos: **solo para desarrollo**.
+
+Para hardening:
+
+1. Montar `mosquitto/mosquitto.secure.conf` en lugar de `mosquitto.conf`.
+2. Crear archivos `mosquitto/passwords` y `mosquitto/acl` a partir de `passwords.example` y `acl.example`.
+3. Configurar `MQTT_USERNAME` y `MQTT_PASSWORD` en backend.
+4. Definir `ACTUATOR_API_KEY` y usar `x-api-key` desde clientes autorizados.
+5. Publicar API detrás de HTTPS/reverse proxy.

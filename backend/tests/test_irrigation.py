@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import Base
 from app.irrigation import evaluate_irrigation, sum_rain_last_24h
-from app.models import Reading
+from app.models import IrrigationState, Reading
 
 
 def _session() -> Session:
@@ -72,5 +72,21 @@ def test_evaluate_irrigation_wet_soil():
         d = evaluate_irrigation(db, "x", soil_moisture=50.0, radiation=800.0)
         assert d.should_irrigate is False
         assert d.reason == "soil_moisture_above_threshold"
+    finally:
+        db.close()
+
+
+def test_evaluate_irrigation_persists_cooldown_state():
+    db = _session()
+    try:
+        decision = evaluate_irrigation(db, "persist1", soil_moisture=20.0, radiation=900.0)
+        assert decision.should_irrigate is True
+        state = db.get(IrrigationState, "persist1")
+        assert state is not None
+        assert state.last_on_unix is not None
+
+        second = evaluate_irrigation(db, "persist1", soil_moisture=20.0, radiation=900.0)
+        assert second.should_irrigate is False
+        assert second.reason == "cooldown_active"
     finally:
         db.close()

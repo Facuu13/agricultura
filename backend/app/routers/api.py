@@ -1,14 +1,23 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Reading
+from app.config import settings
 from app.schemas import ActuatorCommand, HistoryPoint, ReadingOut
 
 router = APIRouter(tags=["api"])
+
+
+def require_actuator_api_key(x_api_key: str | None = Header(default=None)) -> None:
+    configured_api_key = settings.actuator_api_key
+    if not configured_api_key:
+        return
+    if x_api_key != configured_api_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
 @router.get("/sensors", response_model=list[ReadingOut])
@@ -43,6 +52,7 @@ def get_history(
 def post_actuator(
     body: ActuatorCommand,
     request: Request,
+    _: None = Depends(require_actuator_api_key),
 ) -> dict:
     mqtt = getattr(request.app.state, "mqtt_service", None)
     if mqtt is None:

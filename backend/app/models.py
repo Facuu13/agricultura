@@ -17,3 +17,10 @@ class Reading(Base):
     wind_speed: Mapped[float] = mapped_column(Float)
     radiation: Mapped[float] = mapped_column(Float)
     device_timestamp: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class IrrigationState(Base):
+    __tablename__ = "irrigation_state"
+
+    device_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    last_on_unix: Mapped[int | None] = mapped_column(Integer, nullable=True)

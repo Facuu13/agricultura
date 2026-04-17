@@ -1,20 +1,17 @@
-import time
+from datetime import datetime, timezone
 from dataclasses import dataclass
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Reading
+from app.models import IrrigationState, Reading
 
 
 @dataclass
 class IrrigationDecision:
     should_irrigate: bool
     reason: str
-
-
-_last_on_monotonic: dict[str, float] = {}
 
 
 def sum_rain_last_24h(db: Session, device_id: str) -> float:
@@ -35,8 +32,9 @@ def evaluate_irrigation(
     radiation: float,
 ) -> IrrigationDecision:
     rain_sum = sum_rain_last_24h(db, device_id)
-    now_m = time.monotonic()
-    last_on = _last_on_monotonic.get(device_id, 0.0)
+    now_unix = int(datetime.now(tz=timezone.utc).timestamp())
+    state = db.get(IrrigationState, device_id)
+    last_on_unix = state.last_on_unix if state and state.last_on_unix is not None else 0
 
     if soil_moisture >= settings.soil_moisture_threshold:
         return IrrigationDecision(False, "soil_moisture_above_threshold")
@@ -44,10 +42,15 @@ def evaluate_irrigation(
         return IrrigationDecision(False, "rain_24h_above_max")
     if radiation <= settings.radiation_threshold:
         return IrrigationDecision(False, "radiation_below_threshold")
-    if now_m - last_on < settings.min_seconds_between_irrigation_on:
+    if now_unix - last_on_unix < settings.min_seconds_between_irrigation_on:
         return IrrigationDecision(False, "cooldown_active")
 
-    _last_on_monotonic[device_id] = now_m
+    if state is None:
+        state = IrrigationState(device_id=device_id, last_on_unix=now_unix)
+        db.add(state)
+    else:
+        state.last_on_unix = now_unix
+    db.commit()
     return IrrigationDecision(True, "conditions_met")
 
 

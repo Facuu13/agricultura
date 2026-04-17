@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import Reading
 
@@ -119,3 +120,20 @@ def test_post_actuator(client):
 def test_post_actuator_invalid_valve(client):
     r = client.post("/actuator", json={"device_id": "dev1", "valve": "MAYBE"})
     assert r.status_code == 422
+
+
+def test_post_actuator_requires_api_key_when_configured(client):
+    original = settings.actuator_api_key
+    settings.actuator_api_key = "test-key"
+    try:
+        r = client.post("/actuator", json={"device_id": "dev1", "valve": "ON"})
+        assert r.status_code == 401
+
+        r_ok = client.post(
+            "/actuator",
+            json={"device_id": "dev1", "valve": "ON"},
+            headers={"x-api-key": "test-key"},
+        )
+        assert r_ok.status_code == 200
+    finally:
+        settings.actuator_api_key = original

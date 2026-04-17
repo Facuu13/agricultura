@@ -1,4 +1,8 @@
 from collections.abc import Generator
+from pathlib import Path
+import subprocess
+import sys
+import shutil
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -32,6 +36,17 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    from app import models  # noqa: F401
-
-    Base.metadata.create_all(bind=engine)
+    alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+    alembic_bin = shutil.which("alembic") or str(Path(sys.executable).with_name("alembic"))
+    subprocess.run(
+        [
+            alembic_bin,
+            "-c",
+            str(alembic_ini),
+            "-x",
+            f"db_url={settings.database_url}",
+            "upgrade",
+            "head",
+        ],
+        check=True,
+    )

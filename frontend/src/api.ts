@@ -1,6 +1,7 @@
 import { httpBaseToWsUrl } from './httpToWs'
 
 const DEFAULT_BASE = 'http://localhost:8001'
+const DEFAULT_TIMEOUT_MS = 8000
 
 export function getApiBase(): string {
   const fromEnv = import.meta.env.VITE_API_BASE as string | undefined
@@ -11,6 +12,12 @@ export function getApiBase(): string {
 
 export function getWsUrl(): string {
   return httpBaseToWsUrl(getApiBase())
+}
+
+export function getActuatorApiKey(): string | null {
+  const fromEnv = import.meta.env.VITE_ACTUATOR_API_KEY as string | undefined
+  const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('agro_actuator_api_key') : null
+  return (stored || fromEnv || '').trim() || null
 }
 
 export type SensorReading = {
@@ -35,9 +42,27 @@ export type WsReadingPayload = {
   valve_auto: string
 }
 
+async function apiRequest(path: string, init?: RequestInit, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(`${getApiBase()}${path}`, { ...init, signal: controller.signal })
+    if (!response.ok) {
+      throw new Error(await response.text())
+    }
+    return response
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms`)
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
 export async function fetchSensors(): Promise<SensorReading[]> {
-  const r = await fetch(`${getApiBase()}/sensors`)
-  if (!r.ok) throw new Error(await r.text())
+  const r = await apiRequest('/sensors')
   return r.json()
 }
 
@@ -57,16 +82,17 @@ export async function fetchHistory(
   const q = new URLSearchParams({ device_id: deviceId })
   if (from) q.set('from_ts', from)
   if (to) q.set('to_ts', to)
-  const r = await fetch(`${getApiBase()}/history?${q.toString()}`)
-  if (!r.ok) throw new Error(await r.text())
+  const r = await apiRequest(`/history?${q.toString()}`)
   return r.json()
 }
 
 export async function postActuator(deviceId: string, valve: 'ON' | 'OFF'): Promise<void> {
-  const r = await fetch(`${getApiBase()}/actuator`, {
+  const apiKey = getActuatorApiKey()
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (apiKey) headers['x-api-key'] = apiKey
+  await apiRequest('/actuator', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ device_id: deviceId, valve }),
   })
-  if (!r.ok) throw new Error(await r.text())
 }

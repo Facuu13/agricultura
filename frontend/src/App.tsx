@@ -1,130 +1,41 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { useCallback, useState } from 'react'
 import './App.css'
-import {
-  fetchHistory,
-  fetchSensors,
-  getApiBase,
-  getWsUrl,
-  postActuator,
-  type SensorReading,
-  type WsReadingPayload,
-} from './api'
-
-type WsMsg =
-  | { type: 'reading'; payload: WsReadingPayload }
-  | { type: 'actuator_manual'; payload: { device_id: string; valve: string } }
-
-function formatTime(iso: string) {
-  try {
-    const d = new Date(iso)
-    return d.toLocaleString()
-  } catch {
-    return iso
-  }
-}
+import { getActuatorApiKey, getApiBase, postActuator, type WsReadingPayload } from './api'
+import { HistoryChart } from './components/HistoryChart'
+import { MetricsCards } from './components/MetricsCards'
+import { ValveControls } from './components/ValveControls'
+import { useAgroWebSocket } from './hooks/useAgroWebSocket'
+import { useSensorsData } from './hooks/useSensorsData'
 
 export default function App() {
   const [apiBaseInput, setApiBaseInput] = useState(getApiBase)
+  const [actuatorKeyInput, setActuatorKeyInput] = useState(getActuatorApiKey() ?? '')
   const [deviceId, setDeviceId] = useState('dev1')
-  const [sensors, setSensors] = useState<SensorReading[]>([])
-  const [live, setLive] = useState<WsReadingPayload | null>(null)
   const [manualValve, setManualValve] = useState<string | null>(null)
-  const [history, setHistory] = useState<
-    Array<{
-      received_at: string
-      soil_moisture: number
-      rain_mm: number
-      wind_speed: number
-      radiation: number
-      t: string
-    }>
-  >([])
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [wsState, setWsState] = useState<'off' | 'connecting' | 'open'>('off')
+  const { history, loading, error, latestForDevice, setLive, setError, refreshHistory, refreshSensors } =
+    useSensorsData(deviceId)
+
+  const handleReading = useCallback(
+    (payload: WsReadingPayload) => {
+      setLive(payload)
+      if (payload.device_id === deviceId) setManualValve(null)
+    },
+    [deviceId, setLive],
+  )
+
+  const handleManualActuator = useCallback((payload: { device_id: string; valve: string }) => {
+    setManualValve(payload.valve)
+  }, [])
+
+  const { wsState } = useAgroWebSocket({
+    onReading: handleReading,
+    onManualActuator: handleManualActuator,
+  })
 
   const applyApiBase = () => {
     localStorage.setItem('agro_api_base', apiBaseInput.trim())
     window.location.reload()
   }
-
-  const refreshSensors = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await fetchSensors()
-      setSensors(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const refreshHistory = useCallback(async () => {
-    if (!deviceId.trim()) return
-    setError(null)
-    try {
-      const h = await fetchHistory(deviceId.trim())
-      setHistory(
-        h.map((row) => ({
-          ...row,
-          t: formatTime(row.received_at),
-        })),
-      )
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }, [deviceId])
-
-  useEffect(() => {
-    void refreshSensors()
-  }, [refreshSensors])
-
-  useEffect(() => {
-    void refreshHistory()
-  }, [refreshHistory])
-
-  useEffect(() => {
-    setWsState('connecting')
-    const url = getWsUrl()
-    const ws = new WebSocket(url)
-    ws.onopen = () => setWsState('open')
-    ws.onclose = () => setWsState('off')
-    ws.onerror = () => setWsState('off')
-    ws.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(String(ev.data)) as WsMsg
-        if (msg.type === 'reading') {
-          setLive(msg.payload)
-          if (msg.payload.device_id === deviceId) {
-            setManualValve(null)
-          }
-        }
-        if (msg.type === 'actuator_manual') {
-          setManualValve(msg.payload.valve)
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    return () => ws.close()
-  }, [deviceId])
-
-  const latestForDevice = useMemo(() => {
-    if (live && live.device_id === deviceId) return live
-    return sensors.find((s) => s.device_id === deviceId)
-  }, [live, sensors, deviceId])
 
   const irrigationBadge = () => {
     if (!latestForDevice || !('irrigation_recommended' in latestForDevice)) {
@@ -137,6 +48,15 @@ export default function App() {
   }
 
   const badge = irrigationBadge()
+
+  const applyActuatorKey = () => {
+    const value = actuatorKeyInput.trim()
+    if (value) {
+      localStorage.setItem('agro_actuator_api_key', value)
+    } else {
+      localStorage.removeItem('agro_actuator_api_key')
+    }
+  }
 
   const sendValve = async (valve: 'ON' | 'OFF') => {
     setError(null)
@@ -166,6 +86,13 @@ export default function App() {
           Guardar y recargar
         </button>
         <label>
+          API key actuador
+          <input type="text" value={actuatorKeyInput} onChange={(e) => setActuatorKeyInput(e.target.value)} />
+        </label>
+        <button type="button" className="ghost" onClick={applyActuatorKey}>
+          Guardar API key
+        </button>
+        <label>
           Device ID
           <input
             type="text"
@@ -189,94 +116,11 @@ export default function App() {
         <span className={badge.className}>{badge.text}</span>
       </div>
 
-      <div className="cards">
-        <div className="card">
-          <h2>Humedad suelo</h2>
-          <div>
-            <span className="value">
-              {latestForDevice != null ? latestForDevice.soil_moisture.toFixed(1) : '—'}
-            </span>
-            <span className="unit">%</span>
-          </div>
-        </div>
-        <div className="card">
-          <h2>Lluvia (lectura)</h2>
-          <div>
-            <span className="value">
-              {latestForDevice != null ? latestForDevice.rain_mm.toFixed(2) : '—'}
-            </span>
-            <span className="unit">mm</span>
-          </div>
-        </div>
-        <div className="card">
-          <h2>Viento</h2>
-          <div>
-            <span className="value">
-              {latestForDevice != null ? latestForDevice.wind_speed.toFixed(1) : '—'}
-            </span>
-            <span className="unit">m/s</span>
-          </div>
-        </div>
-        <div className="card">
-          <h2>Radiación</h2>
-          <div>
-            <span className="value">
-              {latestForDevice != null ? latestForDevice.radiation.toFixed(0) : '—'}
-            </span>
-            <span className="unit">W/m²</span>
-          </div>
-        </div>
-      </div>
+      <MetricsCards latestForDevice={latestForDevice} />
 
-      <div style={{ marginTop: '1.25rem' }}>
-        <h2 style={{ fontSize: '1rem', color: '#9aba9f', margin: '0 0 0.5rem' }}>Control de válvula</h2>
-        <div className="controls">
-          <button type="button" className="on" onClick={() => void sendValve('ON')}>
-            ON
-          </button>
-          <button type="button" className="off" onClick={() => void sendValve('OFF')}>
-            OFF
-          </button>
-        </div>
-      </div>
+      <ValveControls onSendValve={(valve) => void sendValve(valve)} />
 
-      <div className="chart-wrap">
-        <h2 style={{ fontSize: '1rem', color: '#9aba9f', margin: '0 0 0.75rem' }}>Histórico (humedad y radiación)</h2>
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={history}>
-            <CartesianGrid stroke="#2a3d2e" strokeDasharray="3 3" />
-            <XAxis dataKey="t" tick={{ fill: '#7a9a82', fontSize: 11 }} />
-            <YAxis yAxisId="l" tick={{ fill: '#7a9a82', fontSize: 11 }} />
-            <YAxis yAxisId="r" orientation="right" tick={{ fill: '#7a9a82', fontSize: 11 }} />
-            <Tooltip
-              contentStyle={{ background: '#131a14', border: '1px solid #2a3d2e' }}
-              labelStyle={{ color: '#c8e6c9' }}
-            />
-            <Legend />
-            <Line
-              yAxisId="l"
-              type="monotone"
-              dataKey="soil_moisture"
-              name="Humedad %"
-              stroke="#81c784"
-              dot={false}
-              strokeWidth={2}
-            />
-            <Line
-              yAxisId="r"
-              type="monotone"
-              dataKey="radiation"
-              name="Radiación"
-              stroke="#ffb74d"
-              dot={false}
-              strokeWidth={2}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-        <button type="button" className="ghost" style={{ marginTop: '0.75rem' }} onClick={() => void refreshHistory()}>
-          Refrescar histórico
-        </button>
-      </div>
+      <HistoryChart history={history} onRefresh={() => void refreshHistory()} />
     </div>
   )
 }

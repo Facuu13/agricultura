@@ -52,8 +52,8 @@ class MqttService:
         if getattr(reason_code, "is_failure", False):
             log.error("MQTT connect failed: %s", reason_code)
             return
-        client.subscribe("agro/+/data", qos=0)
-        log.info("MQTT subscribed to agro/+/data")
+        client.subscribe(settings.mqtt_topic_data_pattern, qos=0)
+        log.info("MQTT subscribed to %s", settings.mqtt_topic_data_pattern)
 
     def _on_message(
         self,
@@ -126,6 +126,8 @@ class MqttService:
         )
         client.on_connect = self._on_connect
         client.on_message = self._on_message
+        if settings.mqtt_username:
+            client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
         client.connect_async(settings.mqtt_host, settings.mqtt_port, keepalive=60)
 
         def loop_forever() -> None:

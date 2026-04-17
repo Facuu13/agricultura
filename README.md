@@ -19,8 +19,11 @@ docker compose up -d --build
 - API: `http://localhost:8001` (mapeo `8001:8000` en [docker-compose.yml](docker-compose.yml); si el puerto 8000 está libre podés cambiarlo a `8000:8000`).
 - Mosquitto: `localhost:1883`
 - Variables útiles: `DATABASE_URL`, `MQTT_HOST`, `MQTT_PORT`, `CORS_ORIGINS` (ver [backend/app/config.py](backend/app/config.py)).
+- Variables nuevas de seguridad: `MQTT_USERNAME`, `MQTT_PASSWORD`, `ACTUATOR_API_KEY`.
 
 Endpoints: `GET /health`, `GET /sensors`, `GET /history?device_id=...`, `POST /actuator`, WebSocket `ws://localhost:8001/ws`.
+
+Si configurás `ACTUATOR_API_KEY`, el endpoint `POST /actuator` exige header `x-api-key`.
 
 ## Frontend
 
@@ -56,6 +59,8 @@ Luego abrí el frontend y usá `device_id` `dev1`.
 - [Manual de usuario (panel web)](docs/manual_usuario.md)
 - [Manual técnico / operación](docs/manual_tecnico.md)
 - [Guía de pruebas manuales (checklist)](docs/guia_pruebas_manuales.md)
+- [Matriz mínima de confiabilidad](docs/matriz_pruebas_confiabilidad.md)
+- [Guía de migraciones DB](docs/migraciones_db.md)
 
 ## Simulador de ESP32 (MQTT)
 
